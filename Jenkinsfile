@@ -55,8 +55,6 @@ pipeline {
         
                 echo 'Generating Allure HTML report...'
         
-                bat 'allure generate allure-results -o allure-report --clean'
-        
                 allure([
                     includeProperties: false,
                     jdk: '',
@@ -64,19 +62,7 @@ pipeline {
                 ])
             }
         }
-        stage('Publish HTML Report') {
-            steps {
         
-                publishHTML([
-                    allowMissing: true,
-                    alwaysLinkToLastBuild: true,
-                    keepAll: true,
-                    reportDir: 'allure-report',
-                    reportFiles: 'index.html',
-                    reportName: 'HTML Report'
-                ])
-            }
-        }
     }
 
     post {
