@@ -1,14 +1,6 @@
 pipeline {
 
-    agent {
-        docker {
-            // Official Playwright image with browsers preinstalled
-            image 'mcr.microsoft.com/playwright/python:v1.44.0-jammy'
-
-            // Prevent Chromium crashes inside Docker
-            args '--shm-size=2g --ipc=host'
-        }
-    }
+    agent any
 
     environment {
 
