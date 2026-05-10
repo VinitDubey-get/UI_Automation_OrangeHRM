@@ -3,23 +3,13 @@ pipeline {
     agent any
 
     environment {
-
-        // Application URL
         BASE_URL = 'https://opensource-demo.orangehrmlive.com/web/index.php'
-
-        // Project root for imports
         PYTHONPATH = "${WORKSPACE}"
     }
 
     options {
-
-        // Show timestamps in console logs
         timestamps()
-
-        // Stop build if hanging too long
         timeout(time: 30, unit: 'MINUTES')
-
-        // Keep only last 10 builds
         buildDiscarder(logRotator(numToKeepStr: '10'))
     }
 
@@ -35,28 +25,21 @@ pipeline {
         stage('Install Dependencies') {
             steps {
 
-                echo 'Installing Python dependencies...'
+                echo 'Installing dependencies...'
 
-                sh '''
-                    pip install -r requirements.txt
-                '''
+                bat 'pip install -r requirements.txt'
 
-                sh '''
-                    pip show playwright pytest allure-pytest
-                '''
+                bat 'playwright install chromium'
             }
         }
 
         stage('Smoke Tests') {
             steps {
 
-                echo 'Running smoke test suite...'
+                echo 'Running smoke tests...'
 
-                sh '''
-                    pytest -m smoke \
-                    --alluredir=allure-results \
-                    --clean-alluredir \
-                    -v --tb=short
+                bat '''
+                    pytest -m smoke --alluredir=allure-results --clean-alluredir -v --tb=short
                 '''
             }
         }
@@ -79,8 +62,6 @@ pipeline {
 
         always {
 
-            echo 'Archiving artifacts...'
-
             archiveArtifacts(
                 artifacts: 'allure-results/**',
                 allowEmptyArchive: true
@@ -88,15 +69,15 @@ pipeline {
         }
 
         success {
-            echo 'Smoke suite passed successfully!'
+            echo 'Smoke tests passed!'
         }
 
         unstable {
-            echo 'Some smoke tests failed. Check Allure report.'
+            echo 'Some tests failed.'
         }
 
         failure {
-            echo 'Pipeline execution failed. Check Jenkins logs.'
+            echo 'Pipeline failed.'
         }
     }
 }
