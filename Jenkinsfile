@@ -99,7 +99,7 @@ pipeline {
     
                 mimeType: 'text/html',
     
-                to: 'your_email@gmail.com'
+                to: "${params.USER_EMAIL}"
             )
         }
     
