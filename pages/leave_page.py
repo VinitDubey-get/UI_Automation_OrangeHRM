@@ -1,32 +1,140 @@
 import allure
+import logging
 from pages.base_page import BasePage
- 
+
+logger = logging.getLogger(__name__)
+
+
 class LeavePage(BasePage):
+    """
+    Leave module — Apply Leave, Leave List.
+    Locators verified against:
+      https://opensource-demo.orangehrmlive.com/web/index.php/leave/applyLeave
+    """
+
+    # ── Locators ───────────────────────────────────────────────
     NAV_LEAVE     = "//span[text()='Leave']"
     APPLY_LINK    = "//a[normalize-space()='Apply']"
-    LEAVE_TYPE    = "//label[text()='Leave Type']/../following-sibling::div//div[@class='oxd-select-text-input']"
-    FROM_DATE     = "//label[text()='From Date']/../following-sibling::div//input"
-    TO_DATE       = "//label[text()='To Date']/../following-sibling::div//input"
-    COMMENT       = "//textarea"
-    APPLY_BUTTON  = "//button[normalize-space()='Apply']"
-    SUCCESS_TOAST = ".oxd-toast"
+    LIST_LINK     = "//a[normalize-space()='Leave List']"
+    MY_LEAVE_LINK = "//a[normalize-space()='My Leave']"
 
-    
-    @allure.step('Navigate to Leave → Apply')
-    def go_to_apply(self):
+    # Apply Leave form
+    # OrangeHRM leave type is a custom oxd-select, not a native <select>
+    LEAVE_TYPE_SELECT     = "//label[text()='Leave Type']/ancestor::div[@class='oxd-input-group']//div[@class='oxd-select-text-input']"
+    LEAVE_TYPE_OPTIONS    = ".oxd-select-dropdown .oxd-select-option"
+
+    FROM_DATE_INPUT       = "//label[text()='From Date']/ancestor::div[@class='oxd-input-group']//input[@placeholder='yyyy-dd-mm']"
+    TO_DATE_INPUT         = "//label[text()='To Date']/ancestor::div[@class='oxd-input-group']//input[@placeholder='yyyy-dd-mm']"
+
+    # OrangeHRM uses yyyy-dd-mm format (unusual — note the dd before mm)
+    COMMENT_INPUT         = "//label[text()='Comments']/ancestor::div[@class='oxd-input-group']//textarea"
+    APPLY_BTN             = "//button[@type='submit'][normalize-space()='Apply']"
+
+    SUCCESS_TOAST         = ".oxd-toast--success"
+    ANY_TOAST             = ".oxd-toast"
+
+    # Leave list
+    LEAVE_LIST_ROWS       = ".oxd-table-body .oxd-table-row"
+
+    # ── Navigation ─────────────────────────────────────────────
+
+    @allure.step("Navigate to Leave module")
+    def go_to_leave(self):
+        logger.info("Clicking Leave in sidebar")
         self.page.locator(self.NAV_LEAVE).click()
+        # Wait for the Apply sub-menu to appear — reliable indicator the menu opened
+        self.page.wait_for_selector(self.APPLY_LINK, timeout=10000)
+        logger.info("Leave module opened")
+
+    @allure.step("Navigate to Apply Leave form")
+    def go_to_apply_leave(self):
+        logger.info("Navigating to Apply Leave page")
+        self.go_to_leave()
         self.page.locator(self.APPLY_LINK).click()
- 
-    @allure.step('Apply for leave')
-    def apply_leave(self, leave_type_index=0, from_date='2025-12-01', to_date='2025-12-02'):
-        self.page.locator(self.LEAVE_TYPE).click()
-        options = self.page.locator('.oxd-select-dropdown .oxd-select-option')
-        options.nth(leave_type_index + 1).click()
-        self.page.locator(self.FROM_DATE).fill(from_date)
-        self.page.keyboard.press('Tab')
-        self.page.locator(self.TO_DATE).fill(to_date)
-        self.page.keyboard.press('Tab')
-        self.page.locator(self.COMMENT).fill('Automated test leave request')
-        self.page.locator(self.APPLY_BUTTON).click()
+        self.page.wait_for_url("**/leave/applyLeave", timeout=10000)
+        # Wait for the Apply button — confirms the form is fully rendered
+        self.page.wait_for_selector("button[type='submit']", timeout=10000)
+        logger.info(f"Apply Leave page loaded. URL: {self.page.url}")
 
+    # ── Apply Leave flow ───────────────────────────────────────
 
+    @allure.step("Select leave type")
+    def select_leave_type(self, index: int = 0):
+        logger.info(f"Opening leave type dropdown (selecting index {index})")
+        self.page.locator(self.LEAVE_TYPE_SELECT).click()
+        options = self.page.locator(self.LEAVE_TYPE_OPTIONS)
+        options.wait_for(timeout=5000)
+        count = options.count()
+        logger.info(f"Leave type options available: {count}")
+        # index+1 because the first item is usually the placeholder
+        safe_index = min(index + 1, count - 1)
+        option_text = options.nth(safe_index).text_content().strip()
+        options.nth(safe_index).click()
+        logger.info(f"Selected leave type: '{option_text}'")
+
+    @allure.step("Enter From Date")
+    def enter_from_date(self, date: str):
+        # OrangeHRM expects yyyy-dd-mm format
+        logger.info(f"Entering From Date: {date}")
+        from_input = self.page.locator(self.FROM_DATE_INPUT)
+        from_input.fill(date)
+        self.page.keyboard.press("Tab")
+        self.page.wait_for_timeout(500)
+        logger.info("From Date entered and Tab pressed")
+
+    @allure.step("Enter To Date")
+    def enter_to_date(self, date: str):
+        logger.info(f"Entering To Date: {date}")
+        to_input = self.page.locator(self.TO_DATE_INPUT)
+        to_input.fill(date)
+        self.page.keyboard.press("Tab")
+        self.page.wait_for_timeout(500)
+        logger.info("To Date entered and Tab pressed")
+
+    @allure.step("Enter leave comment")
+    def enter_comment(self, comment: str):
+        logger.info(f"Entering comment: {comment}")
+        self.page.locator(self.COMMENT_INPUT).fill(comment)
+        logger.info("Comment entered")
+
+    @allure.step("Click Apply button")
+    def click_apply(self):
+        logger.info("Clicking Apply button")
+        self.page.locator(self.APPLY_BTN).click()
+        self.page.wait_for_timeout(2000)
+        logger.info("Apply button clicked")
+
+    def apply_leave(
+        self,
+        leave_type_index: int = 0,
+        from_date: str = "2025-01-15",
+        to_date: str = "2025-01-15",
+        comment: str = "Automated test leave request",
+    ):
+        """Full apply-leave flow with individual Allure steps."""
+        self.go_to_apply_leave()
+        self.select_leave_type(leave_type_index)
+        self.enter_from_date(from_date)
+        self.enter_to_date(to_date)
+        self.enter_comment(comment)
+        self.click_apply()
+
+    # ── Leave list ─────────────────────────────────────────────
+
+    @allure.step("Navigate to Leave List")
+    def go_to_leave_list(self):
+        logger.info("Navigating to Leave List")
+        self.go_to_leave()
+        self.page.locator(self.LIST_LINK).click()
+        self.page.wait_for_url("**/leave/viewLeaveList", timeout=10000)
+        self.page.wait_for_selector(".oxd-table", timeout=10000)
+        logger.info("Leave List loaded")
+
+    @allure.step("Navigate to My Leave")
+    def go_to_my_leave(self):
+        logger.info("Navigating to My Leave")
+        self.go_to_leave()
+        self.page.locator(self.MY_LEAVE_LINK).click()
+        self.page.wait_for_url("**/leave/viewMyLeaveList", timeout=10000)
+        self.page.wait_for_selector(".oxd-table", timeout=10000)
+        logger.info("My Leave loaded")
