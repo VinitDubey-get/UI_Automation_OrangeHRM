@@ -1,0 +1,12 @@
+{
+  "base_url":"https://opensource-demo.orangehrmlive.com/web/index.php",
+  "admin":{
+    "username":"admin",
+    "password":"admin123"
+  },
+  "invalid_user":{
+    "username":"wronguser",
+    "password":"wrongpass"
+  }
+
+}

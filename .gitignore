@@ -1,0 +1,11 @@
+ui_automation/
+__pycache__/
+*.pyc
+.pytest_cache/
+allure-results/
+allure-report/
+screenshots/
+videos/
+.env
+*.log
+mode__modules/

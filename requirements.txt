@@ -1,0 +1,10 @@
+playwright==1.44.0
+pytest==8.2.0
+pytest-playwright==0.5.0
+allure-pytest==2.13.5
+pytest-xdist==3.5.0
+Faker==25.2.0
+python-dotenv==1.0.1
+pytest-html==4.1.1
+pytest-retry==1.6.2
+pytest-timeout==2.3.1
