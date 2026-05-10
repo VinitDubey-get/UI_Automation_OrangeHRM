@@ -68,21 +68,49 @@ pipeline {
     post {
 
         always {
-
+    
             archiveArtifacts(
                 artifacts: 'allure-results/**',
                 allowEmptyArchive: true
             )
+    
+            emailext(
+                subject: "Jenkins Build: ${currentBuild.currentResult} - ${env.JOB_NAME}",
+                
+                body: """
+                    <h2>UI Automation Pipeline Result</h2>
+    
+                    <p><b>Project:</b> ${env.JOB_NAME}</p>
+                    <p><b>Build Number:</b> ${env.BUILD_NUMBER}</p>
+                    <p><b>Status:</b> ${currentBuild.currentResult}</p>
+    
+                    <p>
+                        <a href="${env.BUILD_URL}allure">
+                            Open Allure Report
+                        </a>
+                    </p>
+    
+                    <p>
+                        <a href="${env.BUILD_URL}">
+                            Open Jenkins Build
+                        </a>
+                    </p>
+                """,
+    
+                mimeType: 'text/html',
+    
+                to: 'your_email@gmail.com'
+            )
         }
-
+    
         success {
             echo 'Smoke tests passed!'
         }
-
+    
         unstable {
             echo 'Some tests failed.'
         }
-
+    
         failure {
             echo 'Pipeline failed.'
         }
