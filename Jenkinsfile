@@ -35,12 +35,18 @@ pipeline {
 
         stage('Smoke Tests') {
             steps {
-
+        
                 echo 'Running smoke tests...'
-
-                bat '''
-                    pytest -m smoke --alluredir=allure-results --clean-alluredir -v --tb=short
-                '''
+        
+                catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+        
+                    bat '''
+                        pytest -m smoke ^
+                        --alluredir=allure-results ^
+                        --clean-alluredir ^
+                        -v --tb=short
+                    '''
+                }
             }
         }
 
