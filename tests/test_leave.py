@@ -58,23 +58,9 @@ class TestLeave:
         with allure.step("Navigate to Apply Leave"):
             leave.go_to_apply_leave()
 
-        with allure.step("Open leave type dropdown"):
-            # The oxd-select trigger div
-            trigger = logged_in_page.locator(".oxd-select-text").first
-            trigger.click()
-            logger.info("Dropdown clicked")
-
         with allure.step("Count available leave type options"):
-            # Options appear in a dropdown list — wait up to 5s for first one
-            logged_in_page.wait_for_selector(
-                ".oxd-select-dropdown .oxd-select-option", timeout=5000
-            )
-            count = logged_in_page.locator(
-                ".oxd-select-dropdown .oxd-select-option"
-            ).count()
+            count = leave.get_leave_type_count()
             logger.info(f"Leave type options found: {count}")
-            # Close dropdown cleanly
-            logged_in_page.keyboard.press("Escape")
             assert count > 0, "Expected at least one leave type option"
             logger.info("PASS: Leave type dropdown has options")
 

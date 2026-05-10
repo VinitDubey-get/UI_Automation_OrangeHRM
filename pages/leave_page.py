@@ -52,8 +52,11 @@ class LeavePage(BasePage):
         self.go_to_leave()
         self.page.locator(self.APPLY_LINK).click()
         self.page.wait_for_url("**/leave/applyLeave", timeout=10000)
-        # Wait for the Apply button — confirms the form is fully rendered
-        self.page.wait_for_selector("button[type='submit']", timeout=10000)
+        # Wait for the Leave Type dropdown to be ready — it loads options via API
+        # after the submit button appears, so this is the correct ready-signal.
+        self.page.locator(self.LEAVE_TYPE_SELECT).wait_for(
+            state="visible", timeout=15000
+        )
         logger.info(f"Apply Leave page loaded. URL: {self.page.url}")
 
     # ── Apply Leave flow ───────────────────────────────────────
@@ -71,6 +74,23 @@ class LeavePage(BasePage):
         option_text = options.nth(safe_index).text_content().strip()
         options.nth(safe_index).click()
         logger.info(f"Selected leave type: '{option_text}'")
+
+    @allure.step("Count available leave type options")
+    def get_leave_type_count(self) -> int:
+        """
+        Opens the Leave Type dropdown, counts the selectable options,
+        then closes the dropdown without making a selection.
+        Uses the same locator as select_leave_type() — known to be interactable.
+        """
+        logger.info("Opening Leave Type dropdown to count options")
+        self.page.locator(self.LEAVE_TYPE_SELECT).click()
+        options = self.page.locator(self.LEAVE_TYPE_OPTIONS)
+        # Wait for at least the first option to be visible
+        options.first.wait_for(state="visible", timeout=8000)
+        count = options.count()
+        logger.info(f"Leave type options found: {count}")
+        self.page.keyboard.press("Escape")
+        return count
 
     @allure.step("Enter From Date")
     def enter_from_date(self, date: str):
