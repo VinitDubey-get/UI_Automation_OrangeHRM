@@ -75,30 +75,18 @@ pipeline {
             )
     
             emailext(
-                subject: "Jenkins Build: ${currentBuild.currentResult} - ${env.JOB_NAME}",
-                
+                subject: "Jenkins Test Email",
+            
                 body: """
-                    <h2>UI Automation Pipeline Result</h2>
-    
-                    <p><b>Project:</b> ${env.JOB_NAME}</p>
-                    <p><b>Build Number:</b> ${env.BUILD_NUMBER}</p>
-                    <p><b>Status:</b> ${currentBuild.currentResult}</p>
-    
-                    <p>
-                        <a href="${env.BUILD_URL}allure">
-                            Open Allure Report
-                        </a>
-                    </p>
-    
-                    <p>
-                        <a href="${env.BUILD_URL}">
-                            Open Jenkins Build
-                        </a>
-                    </p>
+                    Jenkins email notification is working.
+            
+                    Project: ${env.JOB_NAME}
+            
+                    Build Number: ${env.BUILD_NUMBER}
+            
+                    Build Status: ${currentBuild.currentResult}
                 """,
-    
-                mimeType: 'text/html',
-    
+            
                 to: "${params.USER_EMAIL}"
             )
         }
