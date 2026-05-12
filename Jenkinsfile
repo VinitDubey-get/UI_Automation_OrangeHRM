@@ -50,14 +50,13 @@ pipeline {
             }
         }
 
-        stage('Regression Tests'){
-            {
+        stage('Regression Tests') {
             steps {
-        
+
                 echo 'Running Regression tests...'
-        
+
                 catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
-        
+
                     bat '''
                         pytest -m regression ^
                         --alluredir=allure-results ^
@@ -66,7 +65,6 @@ pipeline {
                     '''
                 }
             }
-        }
         }
 
         stage('Publish Allure Report') {
