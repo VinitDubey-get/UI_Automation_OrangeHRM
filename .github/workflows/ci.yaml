@@ -45,9 +45,11 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # ── Create allure results directory ──────────────────────────────────────
+      # ── Create allure results directory with open permissions ────────────────
       - name: Create allure-results directory
-        run: mkdir -p ${{ github.workspace }}/allure-results
+        run: |
+          mkdir -p ${{ github.workspace }}/allure-results
+          chmod 777 ${{ github.workspace }}/allure-results
 
       # ── Smoke ────────────────────────────────────────────────────────────────
       - name: Run smoke tests
@@ -58,7 +60,7 @@ jobs:
             -e HEADLESS=true \
             -v ${{ github.workspace }}/allure-results:/app/allure-results \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
-            tests/ -m smoke --alluredir=allure-results --clean-alluredir -v --tb=short
+            tests/ -m smoke --alluredir=allure-results -v --tb=short
 
       # ── Regression ───────────────────────────────────────────────────────────
       - name: Run regression tests
