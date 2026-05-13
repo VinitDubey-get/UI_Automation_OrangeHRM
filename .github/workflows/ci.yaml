@@ -90,7 +90,6 @@ jobs:
       - name: Trigger Jenkins Pipeline
         run: |
           curl -X POST "${{ secrets.JENKINS_WEBHOOK_URL }}" \
-            --user "${{ secrets.JENKINS_USER }}:${{ secrets.JENKINS_TOKEN }}" \
             --fail \
             --silent \
             --show-error
