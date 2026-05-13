@@ -106,7 +106,6 @@ jobs:
           echo "Crumb endpoint status: $CRUMB_STATUS"
 
           if [ "$CRUMB_STATUS" = "404" ]; then
-            # CSRF is disabled in Jenkins — proceed without crumb
             echo "CSRF protection is disabled; skipping crumb header"
             CRUMB_HEADER=""
           elif [ "$CRUMB_STATUS" != "200" ]; then
@@ -123,18 +122,26 @@ jobs:
           fi
 
           echo "── Step 3: trigger the build ─────────────────────────────"
-          # Build curl args conditionally — only add -H if crumb exists
+          # NOTE: buildWithParameters works for both parameterised and
+          # plain jobs — /build returns 400 on some Jenkins configurations
           CURL_ARGS=(
             -X POST
             --user "$JENKINS_USER:$JENKINS_TOKEN"
             --fail
-            --silent
             --show-error
-            "$JENKINS_URL/job/$JOB_NAME/build?token=$REMOTE_TOKEN"
+            "$JENKINS_URL/job/$JOB_NAME/buildWithParameters?token=$REMOTE_TOKEN"
           )
           if [ -n "$CRUMB_HEADER" ]; then
             CURL_ARGS+=(-H "$CRUMB_HEADER")
           fi
 
-          curl "${CURL_ARGS[@]}"
-          echo "✓ Jenkins build queued successfully"
+          HTTP_BUILD=$(curl -s -o /dev/null -w "%{http_code}" "${CURL_ARGS[@]}")
+          echo "Build trigger response: $HTTP_BUILD"
+
+          # Jenkins returns 201 Created when build is successfully queued
+          if [ "$HTTP_BUILD" = "201" ] || [ "$HTTP_BUILD" = "200" ]; then
+            echo "✓ Jenkins build queued successfully"
+          else
+            echo "ERROR: Build trigger returned HTTP $HTTP_BUILD"
+            exit 1
+          fi
