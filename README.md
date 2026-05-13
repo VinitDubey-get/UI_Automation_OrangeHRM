@@ -1,1 +1,1 @@
-echo "Testing  Jenkins auto trigger"  >> README.md
+echo "Testing   Jenkins auto trigger"  >> README.md
