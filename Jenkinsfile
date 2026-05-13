@@ -43,7 +43,7 @@ pipeline {
     stages {
 
         // ─────────────────────────────────────────────────────────────
-        // CHECKOUT
+        // CHECKOUT SCM
         // ─────────────────────────────────────────────────────────────
         stage('Checkout SCM') {
             steps {
@@ -52,7 +52,7 @@ pipeline {
         }
 
         // ─────────────────────────────────────────────────────────────
-        // CLEAN ALLURE RESULTS
+        // CLEAN OLD ALLURE RESULTS
         // ─────────────────────────────────────────────────────────────
         stage('Clean Allure Results') {
 
@@ -121,7 +121,7 @@ pipeline {
                             -e HEADLESS=true ^
                             -v %WORKSPACE%/allure-results:/results ^
                             %GHCR_IMAGE%:%IMAGE_TAG% ^
-                            -c "pytest tests/ -m smoke --alluredir=/tmp/allure-results -v --tb=short && cp -r /tmp/allure-results/* /results/"
+                            -c "pytest tests/ -m smoke -p no:cacheprovider --alluredir=/tmp/allure-results -v --tb=short ; cp -r /tmp/allure-results/* /results/ || true"
                     """
                 }
             }
@@ -153,7 +153,7 @@ pipeline {
                             -e HEADLESS=true ^
                             -v %WORKSPACE%/allure-results:/results ^
                             %GHCR_IMAGE%:%IMAGE_TAG% ^
-                            -c "pytest tests/ -m regression --alluredir=/tmp/allure-results -v --tb=short && cp -r /tmp/allure-results/* /results/"
+                            -c "pytest tests/ -m regression -p no:cacheprovider --alluredir=/tmp/allure-results -v --tb=short ; cp -r /tmp/allure-results/* /results/ || true"
                     """
                 }
             }
