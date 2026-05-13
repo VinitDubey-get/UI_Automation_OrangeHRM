@@ -30,15 +30,12 @@ jobs:
 
     steps:
 
-      # Checkout repository
       - name: Checkout
         uses: actions/checkout@v4.2.2
 
-      # Setup Docker Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3.10.0
 
-      # Login to GitHub Container Registry
       - name: Log in to GHCR
         uses: docker/login-action@v3.4.0
         with:
@@ -46,22 +43,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Build & Push Docker Image
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: .
-
-          # Push only on non-PR events
           push: ${{ github.event_name != 'pull_request' }}
-
-          # Load image locally for PR validation
           load: ${{ github.event_name == 'pull_request' }}
-
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -75,7 +65,6 @@ jobs:
 
     needs: build-and-push
 
-    # Trigger only on push to main or ci_cd_setup
     if: >
       (github.ref == 'refs/heads/main' ||
        github.ref == 'refs/heads/ci_cd_setup') &&
@@ -83,13 +72,33 @@ jobs:
 
     steps:
 
-      - name: Debug Jenkins URL
-        run: |
-          echo "${{ secrets.JENKINS_WEBHOOK_URL }}" | sed 's/token=.*/token=***/'
-
       - name: Trigger Jenkins Pipeline
+        env:
+          JENKINS_URL: ${{ secrets.JENKINS_WEBHOOK_URL_BASE }}
+          JENKINS_USER: ${{ secrets.JENKINS_USER }}
+          JENKINS_TOKEN: ${{ secrets.JENKINS_TOKEN }}
+          JOB_NAME: UI_Automation
+          REMOTE_TOKEN: ui-automation-trigger
         run: |
-          curl -X POST "${{ secrets.JENKINS_WEBHOOK_URL }}" \
+          # ── Step 1: fetch a fresh CSRF crumb ──────────────────────────
+          CRUMB=$(curl -s --fail \
+            --user "$JENKINS_USER:$JENKINS_TOKEN" \
+            "$JENKINS_URL/crumbIssuer/api/json" \
+            | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          print(d['crumbRequestField'] + ':' + d['crumb'])
+          ")
+
+          echo "Crumb field: ${CRUMB%%:*}=<hidden>"
+
+          # ── Step 2: trigger the build ──────────────────────────────────
+          curl -X POST \
+            --user "$JENKINS_USER:$JENKINS_TOKEN" \
+            -H "$CRUMB" \
             --fail \
             --silent \
-            --show-error
+            --show-error \
+            "$JENKINS_URL/job/$JOB_NAME/build?token=$REMOTE_TOKEN"
+
+          echo "✓ Jenkins build queued successfully"
