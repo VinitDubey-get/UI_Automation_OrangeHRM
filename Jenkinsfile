@@ -4,8 +4,8 @@ pipeline {
 
     environment {
         GHCR_REGISTRY = 'ghcr.io'
-        GHCR_IMAGE    = "ghcr.io/${params.GITHUB_ACTOR}/expandtesting-automation"
-        IMAGE_TAG     = "${env.BUILD_NUMBER}"
+        GHCR_IMAGE    = 'ghcr.io/vinitdubey-get/ui_automation_orangehrm'
+        IMAGE_TAG     = 'latest'
     }
 
     options {
@@ -13,6 +13,10 @@ pipeline {
         timeout(time: 30, unit: 'MINUTES')
         buildDiscarder(logRotator(numToKeepStr: '10'))
         disableConcurrentBuilds()
+    }
+
+    triggers {
+        cron('0 2 * * *')
     }
 
     parameters {
@@ -27,11 +31,6 @@ pipeline {
             description: 'Target application URL'
         )
         string(
-            name: 'GITHUB_ACTOR',
-            defaultValue: '',
-            description: 'GitHub username (e.g. john-doe) — used for GHCR image path'
-        )
-        string(
             name: 'USER_EMAIL',
             defaultValue: '',
             description: 'Email address to receive build notification'
@@ -40,19 +39,10 @@ pipeline {
 
     stages {
 
-        // ── 1. CHECKOUT ───────────────────────────────────────────────────────
-        stage('Checkout') {
+        // ── 1. PULL IMAGE FROM GHCR ───────────────────────────────────────────
+        stage('Pull Image') {
             steps {
-                echo 'Cloning repository...'
-                checkout scm
-            }
-        }
-
-        // ── 2. BUILD & PUSH TO GHCR ───────────────────────────────────────────
-        // Build the image locally, then push both :BUILD_NUMBER and :latest tags
-        stage('Build & Push to GHCR') {
-            steps {
-                echo "Building image: ${env.GHCR_IMAGE}:${env.IMAGE_TAG}"
+                echo "Pulling image: ${env.GHCR_IMAGE}:${env.IMAGE_TAG}"
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'ghcr-credentials',
@@ -62,46 +52,37 @@ pipeline {
                 ]) {
                     bat """
                         echo %GH_TOKEN% | docker login %GHCR_REGISTRY% --username %GH_USER% --password-stdin
-                        docker build -t %GHCR_IMAGE%:%IMAGE_TAG% -t %GHCR_IMAGE%:latest .
-                        docker push %GHCR_IMAGE%:%IMAGE_TAG%
-                        docker push %GHCR_IMAGE%:latest
+                        docker pull %GHCR_IMAGE%:%IMAGE_TAG%
                     """
                 }
             }
         }
 
-        // ── 3. SMOKE TESTS ────────────────────────────────────────────────────
-        // Pull the image we just pushed, run smoke suite inside container,
-        // bind-mount allure-results back to workspace for report generation
+        // ── 2. SMOKE TESTS ────────────────────────────────────────────────────
         stage('Smoke Tests') {
+            when {
+                anyOf {
+                    expression { params.TEST_SUITE == 'all' }
+                    expression { params.TEST_SUITE == 'smoke' }
+                }
+            }
             steps {
-                echo 'Pulling image and running smoke tests...'
+                echo 'Running smoke tests...'
                 catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
-                    withCredentials([
-                        usernamePassword(
-                            credentialsId: 'ghcr-credentials',
-                            usernameVariable: 'GH_USER',
-                            passwordVariable: 'GH_TOKEN'
-                        )
-                    ]) {
-                        bat """
-                            echo %GH_TOKEN% | docker login %GHCR_REGISTRY% --username %GH_USER% --password-stdin
-                            docker pull %GHCR_IMAGE%:%IMAGE_TAG%
-                            docker run --rm ^
-                                --shm-size=2gb ^
-                                -e BASE_URL=%BASE_URL% ^
-                                -e HEADLESS=true ^
-                                -v %WORKSPACE%/allure-results:/app/allure-results ^
-                                %GHCR_IMAGE%:%IMAGE_TAG% ^
-                                pytest -m smoke --alluredir=allure-results --clean-alluredir -v --tb=short
-                        """
-                    }
+                    bat """
+                        docker run --rm ^
+                            --shm-size=2gb ^
+                            -e BASE_URL=%BASE_URL% ^
+                            -e HEADLESS=true ^
+                            -v %WORKSPACE%/allure-results:/app/allure-results ^
+                            %GHCR_IMAGE%:%IMAGE_TAG% ^
+                            tests/ -m smoke --alluredir=allure-results -v --tb=short
+                    """
                 }
             }
         }
 
-        // ── 4. REGRESSION TESTS ───────────────────────────────────────────────
-        // Reuse the same image — regression appends results to allure-results/
+        // ── 3. REGRESSION TESTS ───────────────────────────────────────────────
         stage('Regression Tests') {
             when {
                 anyOf {
@@ -110,32 +91,22 @@ pipeline {
                 }
             }
             steps {
-                echo 'Pulling image and running regression tests...'
+                echo 'Running regression tests...'
                 catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
-                    withCredentials([
-                        usernamePassword(
-                            credentialsId: 'ghcr-credentials',
-                            usernameVariable: 'GH_USER',
-                            passwordVariable: 'GH_TOKEN'
-                        )
-                    ]) {
-                        bat """
-                            echo %GH_TOKEN% | docker login %GHCR_REGISTRY% --username %GH_USER% --password-stdin
-                            docker run --rm ^
-                                --shm-size=2gb ^
-                                -e BASE_URL=%BASE_URL% ^
-                                -e HEADLESS=true ^
-                                -v %WORKSPACE%/allure-results:/app/allure-results ^
-                                %GHCR_IMAGE%:%IMAGE_TAG% ^
-                                pytest -m regression --alluredir=allure-results -v --tb=short
-                        """
-                    }
+                    bat """
+                        docker run --rm ^
+                            --shm-size=2gb ^
+                            -e BASE_URL=%BASE_URL% ^
+                            -e HEADLESS=true ^
+                            -v %WORKSPACE%/allure-results:/app/allure-results ^
+                            %GHCR_IMAGE%:%IMAGE_TAG% ^
+                            tests/ -m regression --alluredir=allure-results -v --tb=short
+                    """
                 }
             }
         }
 
-        // ── 5. PUBLISH ALLURE REPORT ──────────────────────────────────────────
-        // Jenkins reads allure-results/ from the workspace (bind-mounted above)
+        // ── 4. PUBLISH ALLURE REPORT ──────────────────────────────────────────
         stage('Publish Allure Report') {
             steps {
                 echo 'Generating Allure HTML report...'
@@ -153,150 +124,66 @@ pipeline {
     post {
 
         always {
-
             archiveArtifacts(
                 artifacts: 'allure-results/**',
                 allowEmptyArchive: true
             )
 
-            // Clean up the build-tagged image from the agent after the run
             bat "docker rmi %GHCR_IMAGE%:%IMAGE_TAG% || exit 0"
 
             script {
                 if (params.USER_EMAIL?.trim()) {
                     emailext(
-
                         subject: "🚀 ${env.JOB_NAME} | Build #${env.BUILD_NUMBER} | ${currentBuild.currentResult}",
-
                         mimeType: 'text/html',
-
                         to: "${params.USER_EMAIL}",
-
                         body: """
-
                         <html>
-
                         <body style="font-family: Arial, sans-serif; background-color:#f4f4f4; padding:20px;">
-
-                            <div style="
-                                max-width:700px;
-                                margin:auto;
-                                background:white;
-                                border-radius:10px;
-                                overflow:hidden;
-                                box-shadow:0 2px 8px rgba(0,0,0,0.1);
-                            ">
-
-                                <div style="
-                                    background-color:${currentBuild.currentResult == 'SUCCESS' ? '#28a745' : currentBuild.currentResult == 'UNSTABLE' ? '#ffc107' : '#dc3545'};
-                                    color:white;
-                                    padding:20px;
-                                    text-align:center;
-                                ">
-
-                                    <h1 style="margin:0;">
-                                        ${currentBuild.currentResult}
-                                    </h1>
-
-                                    <p style="margin-top:10px;">
-                                        Jenkins Automation Pipeline Notification
-                                    </p>
-
+                            <div style="max-width:700px; margin:auto; background:white; border-radius:10px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+                                <div style="background-color:${currentBuild.currentResult == 'SUCCESS' ? '#28a745' : currentBuild.currentResult == 'UNSTABLE' ? '#ffc107' : '#dc3545'}; color:white; padding:20px; text-align:center;">
+                                    <h1 style="margin:0;">${currentBuild.currentResult}</h1>
+                                    <p style="margin-top:10px;">Jenkins Automation Pipeline Notification</p>
                                 </div>
-
                                 <div style="padding:30px;">
-
                                     <h2>📌 Build Details</h2>
-
-                                    <table style="width:100%; border-collapse: collapse;">
-
+                                    <table style="width:100%; border-collapse:collapse;">
                                         <tr>
                                             <td style="padding:10px; border-bottom:1px solid #ddd;"><b>Project</b></td>
                                             <td style="padding:10px; border-bottom:1px solid #ddd;">${env.JOB_NAME}</td>
                                         </tr>
-
                                         <tr>
                                             <td style="padding:10px; border-bottom:1px solid #ddd;"><b>Build Number</b></td>
                                             <td style="padding:10px; border-bottom:1px solid #ddd;">#${env.BUILD_NUMBER}</td>
                                         </tr>
-
                                         <tr>
                                             <td style="padding:10px; border-bottom:1px solid #ddd;"><b>Test Suite</b></td>
                                             <td style="padding:10px; border-bottom:1px solid #ddd;">${params.TEST_SUITE}</td>
                                         </tr>
-
                                         <tr>
                                             <td style="padding:10px; border-bottom:1px solid #ddd;"><b>Status</b></td>
-                                            <td style="padding:10px; border-bottom:1px solid #ddd;">
-                                                ${currentBuild.currentResult}
-                                            </td>
+                                            <td style="padding:10px; border-bottom:1px solid #ddd;">${currentBuild.currentResult}</td>
                                         </tr>
-
                                         <tr>
                                             <td style="padding:10px; border-bottom:1px solid #ddd;"><b>Duration</b></td>
                                             <td style="padding:10px; border-bottom:1px solid #ddd;">${currentBuild.durationString}</td>
                                         </tr>
-
                                         <tr>
                                             <td style="padding:10px; border-bottom:1px solid #ddd;"><b>Build URL</b></td>
-                                            <td style="padding:10px; border-bottom:1px solid #ddd;">
-                                                <a href="${env.BUILD_URL}">
-                                                    Open Jenkins Build
-                                                </a>
-                                            </td>
+                                            <td style="padding:10px; border-bottom:1px solid #ddd;"><a href="${env.BUILD_URL}">Open Jenkins Build</a></td>
                                         </tr>
-
                                     </table>
-
                                     <div style="margin-top:30px; text-align:center;">
-
-                                        <a href="${env.BUILD_URL}"
-                                           style="
-                                            background:#007bff;
-                                            color:white;
-                                            padding:12px 20px;
-                                            text-decoration:none;
-                                            border-radius:6px;
-                                            margin-right:10px;
-                                            display:inline-block;
-                                           ">
-                                            🔍 View Build
-                                        </a>
-
-                                        <a href="${env.BUILD_URL}allure"
-                                           style="
-                                            background:#6f42c1;
-                                            color:white;
-                                            padding:12px 20px;
-                                            text-decoration:none;
-                                            border-radius:6px;
-                                            display:inline-block;
-                                           ">
-                                            📊 Open Allure Report
-                                        </a>
-
+                                        <a href="${env.BUILD_URL}" style="background:#007bff; color:white; padding:12px 20px; text-decoration:none; border-radius:6px; margin-right:10px; display:inline-block;">🔍 View Build</a>
+                                        <a href="${env.BUILD_URL}allure" style="background:#6f42c1; color:white; padding:12px 20px; text-decoration:none; border-radius:6px; display:inline-block;">📊 Open Allure Report</a>
                                     </div>
-
                                 </div>
-
-                                <div style="
-                                    background:#f0f0f0;
-                                    padding:15px;
-                                    text-align:center;
-                                    font-size:12px;
-                                    color:#666;
-                                ">
-
+                                <div style="background:#f0f0f0; padding:15px; text-align:center; font-size:12px; color:#666;">
                                     Generated automatically by Jenkins CI Pipeline
-
                                 </div>
-
                             </div>
-
                         </body>
-
                         </html>
-
                         """
                     )
                 }
