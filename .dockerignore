@@ -1,0 +1,29 @@
+# Git
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+
+# Test output — generated at runtime, not needed in image
+allure-results/
+allure-report/
+screenshots/
+videos/
+logs/
+
+# CI/CD — not needed inside container
+.github/
+Jenkinsfile
+
+# Env files — secrets must never go into image
+.env
+
+# Docs
+*.md
+*.txt
+!requirements.txt

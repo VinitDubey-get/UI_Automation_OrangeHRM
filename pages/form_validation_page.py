@@ -1,8 +1,11 @@
-from playwright.sync_api import Page
+from playwright.sync_api import Page, expect
 
 from pages.base_page import BasePage
 
 _PATH = "/form-validation"
+
+# Bootstrap adds this class to <form> on submit — triggers feedback visibility
+_VALIDATED_FORM = "form.was-validated"
 
 
 class FormValidationPage(BasePage):
@@ -14,7 +17,7 @@ class FormValidationPage(BasePage):
         self._payment_method = page.get_by_label("Payment Method")
         self._submit = page.get_by_role("button", name="Register")
 
-        # Feedback locators (Bootstrap invalid-feedback divs)
+        # Bootstrap .invalid-feedback — in DOM always, shown only via was-validated
         self._name_feedback = page.locator(
             "input#validationCustom01 ~ .invalid-feedback"
         )
@@ -49,6 +52,8 @@ class FormValidationPage(BasePage):
     def submit(self) -> None:
         self.logger.info("Submitting form")
         self._submit.click()
+        # Wait for Bootstrap to apply was-validated to the <form> element
+        expect(self.page.locator(_VALIDATED_FORM)).to_be_attached()
 
     def fill_valid_form(self) -> None:
         self.fill_contact_name("John Doe")
@@ -57,18 +62,26 @@ class FormValidationPage(BasePage):
         self.select_payment_method("card")
 
     # ------------------------------------------------------------------ queries
+    # Bootstrap shows feedback via CSS cascade from the was-validated ancestor.
+    # Playwright's is_visible() checks the element's own style, not the cascade.
+    # Use evaluate() to read computedStyle, which respects the full CSS chain.
+
+    def _is_feedback_shown(self, locator) -> bool:
+        return locator.evaluate(
+            "el => getComputedStyle(el).display !== 'none'"
+        )
 
     def is_name_feedback_visible(self) -> bool:
-        return self._name_feedback.is_visible()
+        return self._is_feedback_shown(self._name_feedback)
 
     def is_number_feedback_visible(self) -> bool:
-        return self._number_feedback.is_visible()
+        return self._is_feedback_shown(self._number_feedback)
 
     def is_date_feedback_visible(self) -> bool:
-        return self._date_feedback.is_visible()
+        return self._is_feedback_shown(self._date_feedback)
 
     def is_payment_feedback_visible(self) -> bool:
-        return self._payment_feedback.is_visible()
+        return self._is_feedback_shown(self._payment_feedback)
 
     def get_name_feedback(self) -> str:
         return self._name_feedback.inner_text().strip()

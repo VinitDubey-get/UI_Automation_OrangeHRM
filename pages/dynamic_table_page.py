@@ -22,13 +22,14 @@ class DynamicTablePage(BasePage):
 
     def reload(self) -> None:
         self.logger.info("Reloading dynamic table page")
-        self.page.reload()
+        self.page.reload(wait_until="domcontentloaded", timeout=30000)
         self.wait_for_locator(self._table)
 
     # ------------------------------------------------------------------ queries
 
     def get_column_headers(self) -> List[str]:
-        headers = self._header_row.get_by_role("columnheader").all()
+        # <th> elements inside <thead> — ARIA columnheader role not explicitly set
+        headers = self.page.locator("thead th").all()
         return [h.inner_text().strip() for h in headers]
 
     def get_row_count(self) -> int:
