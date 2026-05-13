@@ -83,6 +83,10 @@ jobs:
 
     steps:
 
+      - name: Debug Jenkins URL
+        run: |
+          echo "${{ secrets.JENKINS_WEBHOOK_URL }}" | sed 's/token=.*/token=***/'
+
       - name: Trigger Jenkins Pipeline
         run: |
           curl -X POST "${{ secrets.JENKINS_WEBHOOK_URL }}" \
