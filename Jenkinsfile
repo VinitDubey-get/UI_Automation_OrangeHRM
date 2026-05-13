@@ -56,6 +56,7 @@ pipeline {
         // ─────────────────────────────────────────────────────────────
         stage('Clean Allure Results') {
             steps {
+
                 echo 'Cleaning old Allure results...'
 
                 bat """
@@ -72,6 +73,7 @@ pipeline {
         // PULL IMAGE FROM GHCR
         // ─────────────────────────────────────────────────────────────
         stage('Pull Image') {
+
             steps {
 
                 echo "Pulling image: ${env.GHCR_IMAGE}:${env.IMAGE_TAG}"
@@ -112,13 +114,12 @@ pipeline {
 
                     bat """
                         docker run --rm ^
-                            --user root ^
                             --shm-size=2gb ^
                             -e BASE_URL=%BASE_URL% ^
                             -e HEADLESS=true ^
-                            -v %WORKSPACE%/allure-results:/app/allure-results ^
+                            -v %WORKSPACE%/allure-results:/results ^
                             %GHCR_IMAGE%:%IMAGE_TAG% ^
-                            pytest tests/ -m smoke --alluredir=/app/allure-results -v --tb=short
+                            sh -c "pytest tests/ -m smoke --alluredir=/tmp/allure-results -v --tb=short && cp -r /tmp/allure-results/* /results/"
                     """
                 }
             }
@@ -144,13 +145,12 @@ pipeline {
 
                     bat """
                         docker run --rm ^
-                            --user root ^
                             --shm-size=2gb ^
                             -e BASE_URL=%BASE_URL% ^
                             -e HEADLESS=true ^
-                            -v %WORKSPACE%/allure-results:/app/allure-results ^
+                            -v %WORKSPACE%/allure-results:/results ^
                             %GHCR_IMAGE%:%IMAGE_TAG% ^
-                            pytest tests/ -m regression --alluredir=/app/allure-results -v --tb=short
+                            sh -c "pytest tests/ -m regression --alluredir=/tmp/allure-results -v --tb=short && cp -r /tmp/allure-results/* /results/"
                     """
                 }
             }
