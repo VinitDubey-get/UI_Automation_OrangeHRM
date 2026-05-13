@@ -80,25 +80,61 @@ jobs:
           JOB_NAME: UI_Automation
           REMOTE_TOKEN: ui-automation-trigger
         run: |
-          # ── Step 1: fetch a fresh CSRF crumb ──────────────────────────
-          CRUMB=$(curl -s --fail \
+          # Strip any accidental trailing slash from the base URL
+          JENKINS_URL="${JENKINS_URL%/}"
+
+          echo "── Step 1: verify Jenkins is reachable ───────────────────"
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             --user "$JENKINS_USER:$JENKINS_TOKEN" \
-            "$JENKINS_URL/crumbIssuer/api/json" \
-            | python3 -c "
+            "$JENKINS_URL/api/json")
+          echo "Jenkins /api/json status: $HTTP_STATUS"
+
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "ERROR: Cannot reach Jenkins. Got HTTP $HTTP_STATUS"
+            echo "Check: JENKINS_WEBHOOK_URL_BASE, JENKINS_USER, JENKINS_TOKEN secrets"
+            exit 1
+          fi
+
+          echo "── Step 2: fetch CSRF crumb ──────────────────────────────"
+          CRUMB_RESPONSE=$(curl -s \
+            -w "\n%{http_code}" \
+            --user "$JENKINS_USER:$JENKINS_TOKEN" \
+            "$JENKINS_URL/crumbIssuer/api/json")
+
+          CRUMB_BODY=$(echo "$CRUMB_RESPONSE" | head -n -1)
+          CRUMB_STATUS=$(echo "$CRUMB_RESPONSE" | tail -n 1)
+          echo "Crumb endpoint status: $CRUMB_STATUS"
+
+          if [ "$CRUMB_STATUS" = "404" ]; then
+            # CSRF is disabled in Jenkins — proceed without crumb
+            echo "CSRF protection is disabled; skipping crumb header"
+            CRUMB_HEADER=""
+          elif [ "$CRUMB_STATUS" != "200" ]; then
+            echo "ERROR: Crumb endpoint returned HTTP $CRUMB_STATUS"
+            echo "Response body: $CRUMB_BODY"
+            exit 1
+          else
+            CRUMB_HEADER=$(echo "$CRUMB_BODY" | python3 -c "
           import sys, json
           d = json.load(sys.stdin)
           print(d['crumbRequestField'] + ':' + d['crumb'])
           ")
+            echo "Crumb field: ${CRUMB_HEADER%%:*}=<hidden>"
+          fi
 
-          echo "Crumb field: ${CRUMB%%:*}=<hidden>"
-
-          # ── Step 2: trigger the build ──────────────────────────────────
-          curl -X POST \
-            --user "$JENKINS_USER:$JENKINS_TOKEN" \
-            -H "$CRUMB" \
-            --fail \
-            --silent \
-            --show-error \
+          echo "── Step 3: trigger the build ─────────────────────────────"
+          # Build curl args conditionally — only add -H if crumb exists
+          CURL_ARGS=(
+            -X POST
+            --user "$JENKINS_USER:$JENKINS_TOKEN"
+            --fail
+            --silent
+            --show-error
             "$JENKINS_URL/job/$JOB_NAME/build?token=$REMOTE_TOKEN"
+          )
+          if [ -n "$CRUMB_HEADER" ]; then
+            CURL_ARGS+=(-H "$CRUMB_HEADER")
+          fi
 
+          curl "${CURL_ARGS[@]}"
           echo "✓ Jenkins build queued successfully"
