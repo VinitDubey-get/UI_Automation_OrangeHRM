@@ -55,6 +55,7 @@ pipeline {
         // CLEAN ALLURE RESULTS
         // ─────────────────────────────────────────────────────────────
         stage('Clean Allure Results') {
+
             steps {
 
                 echo 'Cleaning old Allure results...'
@@ -114,12 +115,13 @@ pipeline {
 
                     bat """
                         docker run --rm ^
+                            --entrypoint sh ^
                             --shm-size=2gb ^
                             -e BASE_URL=%BASE_URL% ^
                             -e HEADLESS=true ^
                             -v %WORKSPACE%/allure-results:/results ^
                             %GHCR_IMAGE%:%IMAGE_TAG% ^
-                            sh -c "pytest tests/ -m smoke --alluredir=/tmp/allure-results -v --tb=short && cp -r /tmp/allure-results/* /results/"
+                            -c "pytest tests/ -m smoke --alluredir=/tmp/allure-results -v --tb=short && cp -r /tmp/allure-results/* /results/"
                     """
                 }
             }
@@ -145,12 +147,13 @@ pipeline {
 
                     bat """
                         docker run --rm ^
+                            --entrypoint sh ^
                             --shm-size=2gb ^
                             -e BASE_URL=%BASE_URL% ^
                             -e HEADLESS=true ^
                             -v %WORKSPACE%/allure-results:/results ^
                             %GHCR_IMAGE%:%IMAGE_TAG% ^
-                            sh -c "pytest tests/ -m regression --alluredir=/tmp/allure-results -v --tb=short && cp -r /tmp/allure-results/* /results/"
+                            -c "pytest tests/ -m regression --alluredir=/tmp/allure-results -v --tb=short && cp -r /tmp/allure-results/* /results/"
                     """
                 }
             }
