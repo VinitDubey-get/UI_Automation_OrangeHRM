@@ -50,7 +50,12 @@ jobs:
         run: bandit -ll -r . --exclude .venv,tests/
 
       - name: pip-audit
-        run: pip-audit -r requirements.txt
+        run: |
+          pip-audit -r requirements.txt \
+            --ignore-vuln GHSA-6w46-j5rx-g56g
+          # GHSA-6w46-j5rx-g56g: pytest tmpdir vulnerability
+          # No pytest-playwright version currently supports pytest>=9
+          # Temporary suppression until upstream dependency constraint is updated
 
   # ─────────────────────────────────────────────────────────────
   # BUILD & PUSH DOCKER IMAGE
