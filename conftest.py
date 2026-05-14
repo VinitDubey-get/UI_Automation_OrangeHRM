@@ -9,8 +9,8 @@ from pages.login_page import LoginPage
 from utils.allure_helpers import attach_screenshot
 from utils.config import HEADLESS, SLOW_MO
 
-
 # ─────────────────────────────────────────────────────────────────── playwright
+
 
 @pytest.fixture(scope="session")
 def playwright_instance():
@@ -27,6 +27,7 @@ def browser(playwright_instance: Playwright) -> Browser:
 
 # ──────────────────────────────────────────────────────────────────── context
 
+
 @pytest.fixture(scope="function")
 def context(browser: Browser) -> BrowserContext:
     ctx = browser.new_context(
@@ -39,6 +40,7 @@ def context(browser: Browser) -> BrowserContext:
 
 # ────────────────────────────────────────────────────────────────────── page
 
+
 @pytest.fixture(scope="function")
 def page(context: BrowserContext) -> Page:
     pg = context.new_page()
@@ -47,6 +49,7 @@ def page(context: BrowserContext) -> Page:
 
 
 # ──────────────────────────────────────────────────────────────── page objects
+
 
 @pytest.fixture(scope="function")
 def login_page(page: Page) -> LoginPage:
@@ -74,6 +77,7 @@ def js_dialogs_page(page: Page) -> JsDialogsPage:
 
 
 # ────────────────────────────────────────────────────────── screenshot on fail
+
 
 @pytest.fixture(autouse=True)
 def auto_screenshot(page: Page, request: pytest.FixtureRequest):

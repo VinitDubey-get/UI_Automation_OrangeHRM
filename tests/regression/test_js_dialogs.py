@@ -18,9 +18,7 @@ class TestJsDialogs:
 
     @allure.story("Confirm dialog accepted")
     @allure.severity(allure.severity_level.NORMAL)
-    def test_confirm_accept_shows_confirmed_result(
-        self, js_dialogs_page: JsDialogsPage
-    ):
+    def test_confirm_accept_shows_confirmed_result(self, js_dialogs_page: JsDialogsPage):
         js_dialogs_page.open()
         js_dialogs_page.trigger_confirm_and_accept()
         result = js_dialogs_page.get_result_text()
@@ -28,9 +26,7 @@ class TestJsDialogs:
 
     @allure.story("Confirm dialog dismissed")
     @allure.severity(allure.severity_level.NORMAL)
-    def test_confirm_dismiss_shows_cancelled_result(
-        self, js_dialogs_page: JsDialogsPage
-    ):
+    def test_confirm_dismiss_shows_cancelled_result(self, js_dialogs_page: JsDialogsPage):
         js_dialogs_page.open()
         js_dialogs_page.trigger_confirm_and_dismiss()
         result = js_dialogs_page.get_result_text()
@@ -46,9 +42,7 @@ class TestJsDialogs:
 
     @allure.story("Prompt dialog dismissed")
     @allure.severity(allure.severity_level.MINOR)
-    def test_prompt_dismiss_shows_null_or_cancel_result(
-        self, js_dialogs_page: JsDialogsPage
-    ):
+    def test_prompt_dismiss_shows_null_or_cancel_result(self, js_dialogs_page: JsDialogsPage):
         js_dialogs_page.open()
         js_dialogs_page.trigger_prompt_and_dismiss()
         result = js_dialogs_page.get_result_text()

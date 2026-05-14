@@ -10,9 +10,7 @@ class TestFormValidation:
 
     @allure.story("Empty form submission")
     @allure.severity(allure.severity_level.CRITICAL)
-    def test_submit_empty_form_shows_all_field_errors(
-        self, form_page: FormValidationPage
-    ):
+    def test_submit_empty_form_shows_all_field_errors(self, form_page: FormValidationPage):
         form_page.open()
         form_page.submit()
         assert form_page.is_name_feedback_visible()

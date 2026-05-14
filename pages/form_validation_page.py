@@ -18,18 +18,10 @@ class FormValidationPage(BasePage):
         self._submit = page.get_by_role("button", name="Register")
 
         # Bootstrap .invalid-feedback — in DOM always, shown only via was-validated
-        self._name_feedback = page.locator(
-            "input#validationCustom01 ~ .invalid-feedback"
-        )
-        self._number_feedback = page.locator(
-            "input#validationCustom02 ~ .invalid-feedback"
-        )
-        self._date_feedback = page.locator(
-            "input#validationCustom03 ~ .invalid-feedback"
-        )
-        self._payment_feedback = page.locator(
-            "select#validationCustom04 ~ .invalid-feedback"
-        )
+        self._name_feedback = page.locator("input#validationCustom01 ~ .invalid-feedback")
+        self._number_feedback = page.locator("input#validationCustom02 ~ .invalid-feedback")
+        self._date_feedback = page.locator("input#validationCustom03 ~ .invalid-feedback")
+        self._payment_feedback = page.locator("select#validationCustom04 ~ .invalid-feedback")
 
     # ------------------------------------------------------------------ actions
 
@@ -67,9 +59,7 @@ class FormValidationPage(BasePage):
     # Use evaluate() to read computedStyle, which respects the full CSS chain.
 
     def _is_feedback_shown(self, locator) -> bool:
-        return locator.evaluate(
-            "el => getComputedStyle(el).display !== 'none'"
-        )
+        return locator.evaluate("el => getComputedStyle(el).display !== 'none'")
 
     def is_name_feedback_visible(self) -> bool:
         return self._is_feedback_shown(self._name_feedback)

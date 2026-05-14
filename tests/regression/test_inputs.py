@@ -1,6 +1,5 @@
 import allure
 import pytest
-from playwright.sync_api import expect
 
 from pages.inputs_page import InputsPage
 

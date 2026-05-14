@@ -1,4 +1,4 @@
-ui_automation/
+ui_automation_venv/
 __pycache__/
 *.pyc
 .pytest_cache/

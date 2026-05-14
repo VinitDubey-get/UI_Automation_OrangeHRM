@@ -15,10 +15,8 @@ class TestLogin:
     def test_valid_login_redirects_to_secure_page(self, login_page: LoginPage):
         login_page.open()
         login_page.login(APP_USERNAME, APP_PASSWORD)
-        login_page.page.wait_for_load_state('networkidle')
-        expect(login_page.page).to_have_url(
-            "https://practice.expandtesting.com/secure"
-        )
+        login_page.page.wait_for_load_state("networkidle")
+        expect(login_page.page).to_have_url("https://practice.expandtesting.com/secure")
         assert login_page.is_logged_in()
 
     @allure.story("Invalid credentials")

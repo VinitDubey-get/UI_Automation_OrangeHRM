@@ -1,4 +1,4 @@
-from playwright.sync_api import Page, Locator
+from playwright.sync_api import Locator, Page
 
 from utils.config import BASE_URL, DEFAULT_TIMEOUT
 from utils.logger import get_logger
