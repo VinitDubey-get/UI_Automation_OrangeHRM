@@ -9,6 +9,7 @@ pipeline {
     }
 
     options {
+        skipDefaultCheckout(true)                         
         timestamps()
         timeout(time: 30, unit: 'MINUTES')
         buildDiscarder(logRotator(numToKeepStr: '10'))
@@ -175,7 +176,7 @@ pipeline {
 
                                 try {
                                     def content = readFile("allure-results\\${file}")
-                                    def json = readJSON text: content
+                                    def json = new groovy.json.JsonSlurper().parseText(content)
 
                                     def status   = json.status  ?: 'unknown'
                                     def testName = json.name    ?: file
@@ -183,12 +184,6 @@ pipeline {
 
                                     def isSmoke      = labels.any { it.name == 'tag' && it.value?.toLowerCase() == 'smoke' }
                                     def isRegression = labels.any { it.name == 'tag' && it.value?.toLowerCase() == 'regression' }
-
-                                    def countFor = { passVar, failVar, skipVar, failList ->
-                                        if (status == 'passed')                     passVar++
-                                        else if (status in ['failed', 'broken'])  { failVar++; failList << testName }
-                                        else if (status == 'skipped')               skipVar++
-                                    }
 
                                     if (isSmoke) {
                                         if (status == 'passed')                    smokePass++
@@ -374,7 +369,6 @@ pipeline {
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr>
           <td>
-            <!-- Jenkins wordmark (SVG inline, no external fetch) -->
             <svg width="110" height="28" viewBox="0 0 110 28" fill="none" xmlns="http://www.w3.org/2000/svg">
               <rect width="28" height="28" rx="5" fill="#D33833"/>
               <text x="14" y="20" font-size="14" font-weight="bold" text-anchor="middle" fill="white" font-family="Arial">J</text>
