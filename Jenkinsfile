@@ -90,6 +90,112 @@ pipeline {
         }
 
         // ─────────────────────────────────────────────────────────────
+        // IMAGE VULNERABILITY SCAN (TRIVY)
+        // ─────────────────────────────────────────────────────────────
+        stage('Image Vulnerability Scan') {
+            steps {
+                echo "Scanning image: ${env.GHCR_IMAGE}:${env.IMAGE_TAG}"
+                catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                    bat """
+                        docker run --rm ^
+                            -v //var/run/docker.sock:/var/run/docker.sock ^
+                            -v %WORKSPACE%:/workspace ^
+                            aquasec/trivy:latest image ^
+                            --exit-code 1 ^
+                            --severity HIGH,CRITICAL ^
+                            --ignore-unfixed ^
+                            --format table ^
+                            --output /workspace/trivy-report.txt ^
+                            %GHCR_IMAGE%:%IMAGE_TAG%
+                    """
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts(
+                        artifacts: 'trivy-report.txt',
+                        allowEmptyArchive: true
+                    )
+                    script {
+                        if (fileExists('trivy-report.txt')) {
+                            def report     = readFile('trivy-report.txt')
+                            def lines      = report.split('\n')
+                            def cvePattern = ~/^[│|]\s+(CVE-\d{4}-\d+)\s+[│|]\s+(CRITICAL|HIGH|MEDIUM|LOW)\s+[│|]\s+(\S+)\s+[│|]\s+(\S*)\s+[│|]\s+(.*?)\s+[│|]/
+
+                            def cveList = []
+                            lines.each { line ->
+                                def m = line =~ cvePattern
+                                if (m) {
+                                    cveList << [
+                                        id      : m[0][1],
+                                        severity: m[0][2],
+                                        pkg     : m[0][3],
+                                        fixedIn : m[0][4] ?: 'No fix available',
+                                        title   : m[0][5]?.trim() ?: 'No description'
+                                    ]
+                                }
+                            }
+
+                            env.TRIVY_CRITICAL = cveList.count { it.severity == 'CRITICAL' }.toString()
+                            env.TRIVY_HIGH     = cveList.count { it.severity == 'HIGH'     }.toString()
+                            echo "Trivy — CRITICAL: ${env.TRIVY_CRITICAL}, HIGH: ${env.TRIVY_HIGH}"
+
+                            if (cveList) {
+                                cveList.each { cve ->
+                                    def isCriticalOrHigh = cve.severity in ['CRITICAL', 'HIGH']
+                                    def uuid = UUID.randomUUID().toString()
+                                    def json = """{
+  "uuid": "${uuid}",
+  "historyId": "${cve.id}",
+  "name": "[${cve.severity}] ${cve.id} — ${cve.pkg}",
+  "status": "${isCriticalOrHigh ? 'failed' : 'passed'}",
+  "description": "Package: ${cve.pkg}\\nSeverity: ${cve.severity}\\nFixed In: ${cve.fixedIn}\\nSummary: ${cve.title}",
+  "labels": [
+    { "name": "suite",    "value": "Security Scan" },
+    { "name": "tag",      "value": "security" },
+    { "name": "severity", "value": "${cve.severity}" },
+    { "name": "feature",  "value": "Image Vulnerability Scan" }
+  ],
+  "links": [
+    { "name": "${cve.id}", "url": "https://nvd.nist.gov/vuln/detail/${cve.id}", "type": "issue" }
+  ]
+}"""
+                                    writeFile(
+                                        file: "allure-results/${uuid}-result.json",
+                                        text: json
+                                    )
+                                }
+                                echo "Written ${cveList.size()} CVE(s) to allure-results/"
+                            } else {
+                                def uuid = UUID.randomUUID().toString()
+                                def json = """{
+  "uuid": "${uuid}",
+  "historyId": "trivy-clean",
+  "name": "Image Vulnerability Scan — No HIGH/CRITICAL CVEs Found",
+  "status": "passed",
+  "description": "Trivy scanned ${env.GHCR_IMAGE}:${env.IMAGE_TAG} and found no HIGH or CRITICAL vulnerabilities.",
+  "labels": [
+    { "name": "suite",   "value": "Security Scan" },
+    { "name": "tag",     "value": "security" },
+    { "name": "feature", "value": "Image Vulnerability Scan" }
+  ]
+}"""
+                                writeFile(
+                                    file: "allure-results/${uuid}-result.json",
+                                    text: json
+                                )
+                                echo "Image is clean — written passed result to allure-results/"
+                            }
+                        } else {
+                            env.TRIVY_CRITICAL = '0'
+                            env.TRIVY_HIGH     = '0'
+                        }
+                    }
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────
         // SMOKE TESTS
         // ─────────────────────────────────────────────────────────────
         stage('Smoke Tests') {
@@ -185,6 +291,10 @@ pipeline {
 
                                     def isSmoke      = labels.any { it.name == 'tag' && it.value?.toLowerCase() == 'smoke' }
                                     def isRegression = labels.any { it.name == 'tag' && it.value?.toLowerCase() == 'regression' }
+                                    def isSecurity   = labels.any { it.name == 'tag' && it.value?.toLowerCase() == 'security' }
+
+                                    // Skip security results from test counting
+                                    if (isSecurity) return
 
                                     if (isSmoke) {
                                         if (status == 'passed')                    smokePass++
@@ -227,10 +337,16 @@ pipeline {
                     env.TOTAL_TESTS = total.toString()
                     env.PASS_RATE   = total > 0 ? String.format('%.1f', (totalPass / total) * 100) : '0.0'
 
+                    // Ensure Trivy vars have defaults if scan stage didn't run
+                    env.TRIVY_CRITICAL = env.TRIVY_CRITICAL ?: '0'
+                    env.TRIVY_HIGH     = env.TRIVY_HIGH     ?: '0'
+
                     echo "=== Test Summary ==="
                     echo "Smoke     : ${smokePass} passed / ${smokeFail} failed / ${smokeSkip} skipped"
                     echo "Regression: ${regressionPass} passed / ${regressionFail} failed / ${regressionSkip} skipped"
                     echo "Total     : ${totalPass}/${total} (${env.PASS_RATE}%)"
+                    echo "=== Security Summary ==="
+                    echo "Trivy CRITICAL: ${env.TRIVY_CRITICAL}, HIGH: ${env.TRIVY_HIGH}"
                 }
             }
         }
@@ -268,7 +384,7 @@ pipeline {
             script {
 
                 // ── Resolve recipient ─────────────────────────────────
-                def recipient = (params.USER_EMAIL?.trim()) ? params.USER_EMAIL.trim() : env.NOTIFICATION_EMAIL
+                def recipient  = (params.USER_EMAIL?.trim()) ? params.USER_EMAIL.trim() : env.NOTIFICATION_EMAIL
                 def isSuccess  = currentBuild.currentResult == 'SUCCESS'
                 def isUnstable = currentBuild.currentResult == 'UNSTABLE'
 
@@ -278,6 +394,16 @@ pipeline {
                 def statusLabel  = isSuccess ? 'Passed'  : isUnstable ? 'Unstable' : 'Failed'
                 def statusEmoji  = isSuccess ? '&#x2714;' : isUnstable ? '&#x26A0;' : '&#x2718;'
                 def subjectEmoji = isSuccess ? '✅' : isUnstable ? '⚠️' : '❌'
+
+                // ── Security card values ──────────────────────────────
+                def trivyCritical   = (env.TRIVY_CRITICAL ?: '0').toInteger()
+                def trivyHigh       = (env.TRIVY_HIGH     ?: '0').toInteger()
+                def trivyClean      = (trivyCritical + trivyHigh) == 0
+                def securityStatus  = trivyClean ? 'CLEAN' : 'VULNERABLE'
+                def securityColor   = trivyClean ? '#16a34a' : '#dc2626'
+                def securityBg      = trivyClean ? '#f0fdf4' : '#fef2f2'
+                def securityBorder  = trivyClean ? '#bbf7d0' : '#fecaca'
+                def securityIcon    = trivyClean ? '&#x2714;' : '&#x26A0;'
 
                 // ── Suite block renderer ──────────────────────────────
                 def suiteBlock = { suiteName, suiteTag, pass, fail, skip, failedList ->
@@ -473,11 +599,92 @@ pipeline {
                       </tr>
 
                       <!-- ══════════════════════════════════════
-                          STAT CARDS
+                          SECURITY SCAN CARD
                       ══════════════════════════════════════ -->
                       <tr>
                         <td style="background:#ffffff;padding:0 32px 28px;
                                   border-left:1px solid #e5e7eb;border-right:1px solid #e5e7eb;">
+
+                          <p style="margin:0 0 14px;font-size:11px;font-weight:600;color:#9ca3af;
+                                    text-transform:uppercase;letter-spacing:1px;">Security Scan — Trivy</p>
+
+                          <table width="100%" cellpadding="0" cellspacing="0"
+                                 style="background:${securityBg};border:1px solid ${securityBorder};
+                                        border-radius:8px;overflow:hidden;">
+                            <tr>
+                              <td style="padding:16px 20px;">
+                                <table width="100%" cellpadding="0" cellspacing="0">
+                                  <tr>
+                                    <td valign="middle">
+                                      <span style="display:inline-block;padding:2px 10px;border-radius:4px;
+                                                   font-size:10px;font-weight:700;letter-spacing:0.8px;
+                                                   color:${securityColor};background:#ffffff;
+                                                   border:1px solid ${securityBorder};
+                                                   margin-right:8px;text-transform:uppercase;">
+                                        ${securityIcon}&nbsp;SECURITY
+                                      </span>
+                                      <span style="font-size:13px;font-weight:600;color:#111827;">
+                                        Image Vulnerability Scan
+                                      </span>
+                                    </td>
+                                    <td align="right" valign="middle">
+                                      <span style="font-size:13px;font-weight:700;color:${securityColor};">
+                                        ${securityStatus}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                </table>
+                              </td>
+                            </tr>
+                            <tr>
+                              <td style="padding:0 20px 16px;">
+                                <table width="100%" cellpadding="0" cellspacing="0">
+                                  <tr>
+                                    <td width="50%" align="center"
+                                        style="background:#fef2f2;border:1px solid #fecaca;
+                                               border-radius:6px;padding:12px 8px;margin-right:8px;">
+                                      <p style="margin:0;font-size:24px;font-weight:700;color:#dc2626;line-height:1;">
+                                        ${trivyCritical}
+                                      </p>
+                                      <p style="margin:4px 0 0;font-size:11px;color:#6b7280;font-weight:500;">
+                                        CRITICAL CVEs
+                                      </p>
+                                    </td>
+                                    <td width="4%"></td>
+                                    <td width="50%" align="center"
+                                        style="background:#fffbeb;border:1px solid #fde68a;
+                                               border-radius:6px;padding:12px 8px;">
+                                      <p style="margin:0;font-size:24px;font-weight:700;color:#d97706;line-height:1;">
+                                        ${trivyHigh}
+                                      </p>
+                                      <p style="margin:4px 0 0;font-size:11px;color:#6b7280;font-weight:500;">
+                                        HIGH CVEs
+                                      </p>
+                                    </td>
+                                  </tr>
+                                </table>
+                              </td>
+                            </tr>
+                            <tr>
+                              <td style="padding:0 20px 16px;">
+                                <p style="margin:0;font-size:11px;color:#6b7280;">
+                                  Scanned: <code style="background:#f3f4f6;padding:1px 6px;border-radius:3px;
+                                                         font-size:11px;">${env.GHCR_IMAGE}:${env.IMAGE_TAG}</code>
+                                  &nbsp;|&nbsp; Severity filter: HIGH, CRITICAL &nbsp;|&nbsp; Unfixed ignored
+                                </p>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+
+                      <!-- ══════════════════════════════════════
+                          STAT CARDS
+                      ══════════════════════════════════════ -->
+                      <tr>
+                        <td style="background:#ffffff;padding:0 32px 28px;
+                                  border-left:1px solid #e5e7eb;border-right:1px solid #e5e7eb;
+                                  border-top:1px solid #f3f4f6;">
 
                           <p style="margin:0 0 14px;font-size:11px;font-weight:600;color:#9ca3af;
                                     text-transform:uppercase;letter-spacing:1px;">Test Summary</p>
@@ -631,7 +838,7 @@ pipeline {
         }
 
         unstable {
-            echo '⚠️ Pipeline completed with test failures — check Allure report.'
+            echo '⚠️ Pipeline completed with test failures or vulnerabilities — check Allure report.'
         }
 
         failure {
