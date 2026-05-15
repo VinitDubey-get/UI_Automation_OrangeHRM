@@ -94,22 +94,9 @@ pipeline {
         // ─────────────────────────────────────────────────────────────
         stage('Image Vulnerability Scan') {
             steps {
-                echo "Scanning image: ${env.GHCR_IMAGE}:${env.IMAGE_TAG}"
-                
-                    bat """
-                        docker run --rm ^ 
-                            -v //var/run/docker.sock:/var/run/docker.sock ^
-                            -v %WORKSPACE%:/workspace ^
-                            aquasec/trivy:latest image ^
-                            --exit-code 0 ^
-                            --severity HIGH,CRITICAL ^
-                            --ignore-unfixed ^
-                            --format table ^
-                            --output /workspace/trivy-report.txt ^
-                            %GHCR_IMAGE%:%IMAGE_TAG%
-                    """
-                
-            }
+    echo "Scanning image: ${env.GHCR_IMAGE}:${env.IMAGE_TAG}"
+    bat "docker run --rm -v //var/run/docker.sock:/var/run/docker.sock -v %WORKSPACE%:/workspace aquasec/trivy:latest image --exit-code 0 --severity HIGH,CRITICAL --ignore-unfixed --format table --output %WORKSPACE%\\trivy-report.txt %GHCR_IMAGE%:%IMAGE_TAG%"
+}
             post {
                 always {
                     archiveArtifacts(
