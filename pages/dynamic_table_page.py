@@ -1,3 +1,4 @@
+import re
 from typing import List
 
 from playwright.sync_api import Page
@@ -54,4 +55,5 @@ class DynamicTablePage(BasePage):
         self._chrome_label.wait_for(state="visible")
         # Label text: "Chrome CPU: 7.9%" → extract the value part
         text = self._chrome_label.inner_text().strip()
-        return text.split(":")[-1].strip()
+        match = re.search(r"\d+(?:\.\d+)?%", text)
+        return match.group(0) if match else ""

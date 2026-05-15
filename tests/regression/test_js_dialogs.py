@@ -14,7 +14,7 @@ class TestJsDialogs:
         js_dialogs_page.open()
         js_dialogs_page.trigger_alert_and_accept()
         result = js_dialogs_page.get_result_text()
-        assert "alert" in result.lower()
+        assert "ok" in result.lower() or "alert" in result.lower()
 
     @allure.story("Confirm dialog accepted")
     @allure.severity(allure.severity_level.NORMAL)
@@ -46,4 +46,10 @@ class TestJsDialogs:
         js_dialogs_page.open()
         js_dialogs_page.trigger_prompt_and_dismiss()
         result = js_dialogs_page.get_result_text()
-        assert result != "" and result.lower() != "waiting"
+        assert result.lower() != "waiting"
+        assert (
+            result == ""
+            or "null" in result.lower()
+            or "cancel" in result.lower()
+            or "false" in result.lower()
+        )

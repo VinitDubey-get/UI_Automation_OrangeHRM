@@ -22,7 +22,7 @@ class TestFormValidation:
     @allure.severity(allure.severity_level.NORMAL)
     def test_missing_name_shows_name_feedback(self, form_page: FormValidationPage):
         form_page.open()
-        form_page.fill_contact_number("1234567890")
+        form_page.fill_contact_number("123-1234567")
         form_page.fill_pickup_date("2025-12-01")
         form_page.select_payment_method("cash on delivery")
         form_page.submit()
