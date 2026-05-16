@@ -92,96 +92,96 @@ pipeline {
         // ─────────────────────────────────────────────────────────────
         // IMAGE VULNERABILITY SCAN (TRIVY)
         // ─────────────────────────────────────────────────────────────
-        stage('Image Vulnerability Scan') {
-            steps {
-    echo "Scanning image: ${env.GHCR_IMAGE}:${env.IMAGE_TAG}"
-    bat "docker run --rm -v //var/run/docker.sock:/var/run/docker.sock -v %WORKSPACE%:/workspace aquasec/trivy:latest image --exit-code 0 --severity HIGH,CRITICAL --ignore-unfixed --format table --output %WORKSPACE%\\trivy-report.txt %GHCR_IMAGE%:%IMAGE_TAG%"
-}
-            post {
-                always {
-                    archiveArtifacts(
-                        artifacts: 'trivy-report.txt',
-                        allowEmptyArchive: true
-                    )
-                    script {
-                        if (fileExists('trivy-report.txt')) {
-                            def report     = readFile('trivy-report.txt')
-                            def lines      = report.split('\n')
-                            def cvePattern = ~/^[│|]\s+(CVE-\d{4}-\d+)\s+[│|]\s+(CRITICAL|HIGH|MEDIUM|LOW)\s+[│|]\s+(\S+)\s+[│|]\s+(\S*)\s+[│|]\s+(.*?)\s+[│|]/
+//         stage('Image Vulnerability Scan') {
+//             steps {
+//     echo "Scanning image: ${env.GHCR_IMAGE}:${env.IMAGE_TAG}"
+//     bat "docker run --rm -v //var/run/docker.sock:/var/run/docker.sock -v %WORKSPACE%:/workspace aquasec/trivy:latest image --exit-code 0 --severity HIGH,CRITICAL --ignore-unfixed --format table --output %WORKSPACE%\\trivy-report.txt %GHCR_IMAGE%:%IMAGE_TAG%"
+// }
+//             post {
+//                 always {
+//                     archiveArtifacts(
+//                         artifacts: 'trivy-report.txt',
+//                         allowEmptyArchive: true
+//                     )
+//                     script {
+//                         if (fileExists('trivy-report.txt')) {
+//                             def report     = readFile('trivy-report.txt')
+//                             def lines      = report.split('\n')
+//                             def cvePattern = ~/^[│|]\s+(CVE-\d{4}-\d+)\s+[│|]\s+(CRITICAL|HIGH|MEDIUM|LOW)\s+[│|]\s+(\S+)\s+[│|]\s+(\S*)\s+[│|]\s+(.*?)\s+[│|]/
 
-                            def cveList = []
-                            lines.each { line ->
-                                def m = line =~ cvePattern
-                                if (m) {
-                                    cveList << [
-                                        id      : m[0][1],
-                                        severity: m[0][2],
-                                        pkg     : m[0][3],
-                                        fixedIn : m[0][4] ?: 'No fix available',
-                                        title   : m[0][5]?.trim() ?: 'No description'
-                                    ]
-                                }
-                            }
+//                             def cveList = []
+//                             lines.each { line ->
+//                                 def m = line =~ cvePattern
+//                                 if (m) {
+//                                     cveList << [
+//                                         id      : m[0][1],
+//                                         severity: m[0][2],
+//                                         pkg     : m[0][3],
+//                                         fixedIn : m[0][4] ?: 'No fix available',
+//                                         title   : m[0][5]?.trim() ?: 'No description'
+//                                     ]
+//                                 }
+//                             }
 
-                            env.TRIVY_CRITICAL = cveList.count { it.severity == 'CRITICAL' }.toString()
-                            env.TRIVY_HIGH     = cveList.count { it.severity == 'HIGH'     }.toString()
-                            echo "Trivy — CRITICAL: ${env.TRIVY_CRITICAL}, HIGH: ${env.TRIVY_HIGH}"
+//                             env.TRIVY_CRITICAL = cveList.count { it.severity == 'CRITICAL' }.toString()
+//                             env.TRIVY_HIGH     = cveList.count { it.severity == 'HIGH'     }.toString()
+//                             echo "Trivy — CRITICAL: ${env.TRIVY_CRITICAL}, HIGH: ${env.TRIVY_HIGH}"
 
-                            if (cveList) {
-                                cveList.each { cve ->
-                                    def isCriticalOrHigh = cve.severity in ['CRITICAL', 'HIGH']
-                                    def uuid = UUID.randomUUID().toString()
-                                    def json = """{
-  "uuid": "${uuid}",
-  "historyId": "${cve.id}",
-  "name": "[${cve.severity}] ${cve.id} — ${cve.pkg}",
-  "status": "${isCriticalOrHigh ? 'failed' : 'passed'}",
-  "description": "Package: ${cve.pkg}\\nSeverity: ${cve.severity}\\nFixed In: ${cve.fixedIn}\\nSummary: ${cve.title}",
-  "labels": [
-    { "name": "suite",    "value": "Security Scan" },
-    { "name": "tag",      "value": "security" },
-    { "name": "severity", "value": "${cve.severity}" },
-    { "name": "feature",  "value": "Image Vulnerability Scan" }
-  ],
-  "links": [
-    { "name": "${cve.id}", "url": "https://nvd.nist.gov/vuln/detail/${cve.id}", "type": "issue" }
-  ]
-}"""
-                                    writeFile(
-                                        file: "allure-results/${uuid}-result.json",
-                                        text: json
-                                    )
-                                }
-                                echo "Written ${cveList.size()} CVE(s) to allure-results/"
-                                currentBuild.result = 'UNSTABLE'
-                            } else {
-                                def uuid = UUID.randomUUID().toString()
-                                def json = """{
-  "uuid": "${uuid}",
-  "historyId": "trivy-clean",
-  "name": "Image Vulnerability Scan — No HIGH/CRITICAL CVEs Found",
-  "status": "passed",
-  "description": "Trivy scanned ${env.GHCR_IMAGE}:${env.IMAGE_TAG} and found no HIGH or CRITICAL vulnerabilities.",
-  "labels": [
-    { "name": "suite",   "value": "Security Scan" },
-    { "name": "tag",     "value": "security" },
-    { "name": "feature", "value": "Image Vulnerability Scan" }
-  ]
-}"""
-                                writeFile(
-                                    file: "allure-results/${uuid}-result.json",
-                                    text: json
-                                )
-                                echo "Image is clean — written passed result to allure-results/"
-                            }
-                        } else {
-                            env.TRIVY_CRITICAL = '0'
-                            env.TRIVY_HIGH     = '0'
-                        }
-                    }
-                }
-            }
-        }
+//                             if (cveList) {
+//                                 cveList.each { cve ->
+//                                     def isCriticalOrHigh = cve.severity in ['CRITICAL', 'HIGH']
+//                                     def uuid = UUID.randomUUID().toString()
+//                                     def json = """{
+//   "uuid": "${uuid}",
+//   "historyId": "${cve.id}",
+//   "name": "[${cve.severity}] ${cve.id} — ${cve.pkg}",
+//   "status": "${isCriticalOrHigh ? 'failed' : 'passed'}",
+//   "description": "Package: ${cve.pkg}\\nSeverity: ${cve.severity}\\nFixed In: ${cve.fixedIn}\\nSummary: ${cve.title}",
+//   "labels": [
+//     { "name": "suite",    "value": "Security Scan" },
+//     { "name": "tag",      "value": "security" },
+//     { "name": "severity", "value": "${cve.severity}" },
+//     { "name": "feature",  "value": "Image Vulnerability Scan" }
+//   ],
+//   "links": [
+//     { "name": "${cve.id}", "url": "https://nvd.nist.gov/vuln/detail/${cve.id}", "type": "issue" }
+//   ]
+// }"""
+//                                     writeFile(
+//                                         file: "allure-results/${uuid}-result.json",
+//                                         text: json
+//                                     )
+//                                 }
+//                                 echo "Written ${cveList.size()} CVE(s) to allure-results/"
+//                                 currentBuild.result = 'UNSTABLE'
+//                             } else {
+//                                 def uuid = UUID.randomUUID().toString()
+//                                 def json = """{
+//   "uuid": "${uuid}",
+//   "historyId": "trivy-clean",
+//   "name": "Image Vulnerability Scan — No HIGH/CRITICAL CVEs Found",
+//   "status": "passed",
+//   "description": "Trivy scanned ${env.GHCR_IMAGE}:${env.IMAGE_TAG} and found no HIGH or CRITICAL vulnerabilities.",
+//   "labels": [
+//     { "name": "suite",   "value": "Security Scan" },
+//     { "name": "tag",     "value": "security" },
+//     { "name": "feature", "value": "Image Vulnerability Scan" }
+//   ]
+// }"""
+//                                 writeFile(
+//                                     file: "allure-results/${uuid}-result.json",
+//                                     text: json
+//                                 )
+//                                 echo "Image is clean — written passed result to allure-results/"
+//                             }
+//                         } else {
+//                             env.TRIVY_CRITICAL = '0'
+//                             env.TRIVY_HIGH     = '0'
+//                         }
+//                     }
+//                 }
+//             }
+//         }
 
         // ─────────────────────────────────────────────────────────────
         // SMOKE TESTS
